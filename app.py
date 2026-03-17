@@ -1,6 +1,7 @@
 import random
 import streamlit as st
 
+#FIX: Refactored logic into logic_utils.py using Copilot Agent mode).
 from logic_utils import (
     get_range_for_difficulty,
     parse_guess,
@@ -8,74 +9,133 @@ from logic_utils import (
     update_score,
 )
 
-st.set_page_config(page_title="Number Guess Game")
+st.set_page_config(page_title="Glitchy Guesser", page_icon="🎮")
 
-st.title("Glitch Investigator — Number Guess")
+st.title("🎮 Game Glitch Investigator")
+st.caption("An AI-generated guessing game. Something is off.")
 
-# Difficulty selector
-difficulty = st.selectbox("Difficulty", ["Easy", "Normal", "Hard"], index=1)
-if "difficulty" not in st.session_state:
-    st.session_state.difficulty = difficulty
-else:
-    # update stored difficulty when user changes selection
-    st.session_state.difficulty = difficulty
+st.sidebar.header("Settings")
+
+difficulty = st.sidebar.selectbox(
+    "Difficulty",
+    ["Easy", "Normal", "Hard"],
+    index=1,
+)
+
+attempt_limit_map = {
+    "Easy": 6,
+    "Normal": 8,
+    "Hard": 5,
+}
+attempt_limit = attempt_limit_map[difficulty]
+
+low, high = get_range_for_difficulty(difficulty)
+
+st.sidebar.caption(f"Range: {low} to {high}")
+st.sidebar.caption(f"Attempts allowed: {attempt_limit}")
+
 
 def new_game():
-    low, high = get_range_for_difficulty(st.session_state.difficulty)
     st.session_state.secret = random.randint(low, high)
     st.session_state.attempts = 0
     st.session_state.score = 0
-    st.session_state.status = ""
+    st.session_state.status = "playing"
     st.session_state.history = []
+
+
+if st.session_state.get("difficulty") != difficulty:
+    st.session_state.difficulty = difficulty
+    new_game()
 
 if "secret" not in st.session_state:
     new_game()
 
-st.info("Guess a number between 1 and 100.")  # note: UI text is static (original behavior)
+if "attempts" not in st.session_state:
+    st.session_state.attempts = 0
 
-raw = st.text_input("Enter your guess", value="", key="raw_input")
-if st.button("Submit"):
-    ok, guess, err = parse_guess(raw)
-    st.session_state.history = st.session_state.get("history", [])
-    if not ok:
-        st.session_state.history.append(raw)
-        if err and "out of range" in err.lower():
-            st.session_state.status = err
-        else:
-            st.error(err)
-    else:
-        # increment attempts and possibly mutate secret type for parity (original behavior preserved)
-        st.session_state.attempts = st.session_state.get("attempts", 0) + 1
+if "score" not in st.session_state:
+    st.session_state.score = 0
 
-        # replicate prior odd behavior where secret could be string on even attempts
-        if st.session_state.attempts % 2 == 0:
-            # force secret to string on even attempts (preserve original quirk)
-            st.session_state.secret = str(st.session_state.secret)
-        else:
-            try:
-                st.session_state.secret = int(st.session_state.secret)
-            except ValueError:
-                pass
+if "status" not in st.session_state:
+    st.session_state.status = "playing"
 
-        outcome, message = check_guess(guess, st.session_state.secret)
-        st.session_state.score = update_score(st.session_state.get("score", 0), outcome, st.session_state.attempts)
-        st.session_state.status = message
-        st.session_state.history.append({"guess": raw, "outcome": outcome, "message": message})
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-if st.button("New Game"):
+st.subheader("Make a guess")
+
+st.info(
+    f"Guess a number between 1 and 100. "
+    f"Attempts left: {max(attempt_limit - st.session_state.attempts, 0)}"
+)
+
+with st.expander("Developer Debug Info"):
+    st.write("Secret:", st.session_state.secret)
+    st.write("Attempts:", st.session_state.attempts)
+    st.write("Score:", st.session_state.score)
+    st.write("Difficulty:", difficulty)
+    st.write("History:", st.session_state.history)
+
+raw_guess = st.text_input(
+    "Enter your guess:",
+    key=f"guess_input_{difficulty}"
+)
+
+col1, col2, col3 = st.columns(3)
+with col1:
+    submit = st.button("Submit Guess 🚀")
+with col2:
+    start_new_game = st.button("New Game 🔁")
+with col3:
+    show_hint = st.checkbox("Show hint", value=True)
+
+if start_new_game:
     new_game()
+    st.success("New game started.")
+    st.rerun()
 
-# Display status and stats
-st.write("Status:", st.session_state.get("status", ""))
-st.write("Attempts:", st.session_state.get("attempts", 0))
-st.write("Score:", st.session_state.get("score", 0))
+if st.session_state.status != "playing":
+    if st.session_state.status == "won":
+        st.success("You already won. Start a new game to play again.")
+    else:
+        st.error("Game over. Start a new game to try again.")
+    st.stop()
 
-st.subheader("History")
-for item in st.session_state.get("history", []):
-    st.write(item)
+if submit:
+    ok, guess_int, err = parse_guess(raw_guess)
 
-# Developer / debug info
-with st.expander("Debug info"):
-    st.write("secret (raw):", st.session_state.get("secret"))
-    low, high = get_range_for_difficulty(st.session_state.difficulty)
-    st.write("range:", (low, high))
+    if not ok:
+        st.session_state.history.append(raw_guess)
+        st.error(err)
+    else:
+        st.session_state.attempts += 1
+        st.session_state.history.append(guess_int)
+
+        outcome, message = check_guess(guess_int, st.session_state.secret)
+
+        if show_hint:
+            st.warning(message)
+
+        st.session_state.score = update_score(
+            current_score=st.session_state.score,
+            outcome=outcome,
+            attempt_number=st.session_state.attempts,
+        )
+
+        if outcome == "Win":
+            st.balloons()
+            st.session_state.status = "won"
+            st.success(
+                f"You won! The secret was {st.session_state.secret}. "
+                f"Final score: {st.session_state.score}"
+            )
+        elif st.session_state.attempts >= attempt_limit:
+            st.session_state.status = "lost"
+            st.error(
+                f"Out of attempts! "
+                f"The secret was {st.session_state.secret}. "
+                f"Score: {st.session_state.score}"
+            )
+
+st.divider()
+st.caption("Built by an AI that claims this code is production-ready.")
