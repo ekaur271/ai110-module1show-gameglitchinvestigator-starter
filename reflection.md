@@ -5,8 +5,16 @@ Answer each question in 3 to 5 sentences. Be specific and honest about what actu
 ## 1. What was broken when you started?
 
 - What did the game look like the first time you ran it?
+I think it was fairly straightforward. Especially what it wanted me to do and how to play. Everything was labeled pretty well 
+
+
 - List at least two concrete bugs you noticed at the start  
   (for example: "the hints were backwards").
+  - The hints of go lower and go higher are off. 
+  - It lets you enter numbers below 1. 
+  - The buttons are lowkey kinda glitchy especially new game, I don't think that one works. 
+
+  Note: I will be focusing on the first two bugs to fix. 
 
 ---
 
